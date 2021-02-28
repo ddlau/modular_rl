@@ -5,7 +5,7 @@ This script runs the cross-entropy method
 
 from gym.envs import make
 from modular_rl import *
-import argparse, sys, cPickle, shutil
+import argparse, sys, _pickle as cPickle, shutil
 import gym, logging
 
 from tabulate import tabulate
@@ -44,8 +44,8 @@ if __name__ == "__main__":
             diagnostics[stat].append(val)
         if args.plot:
             animate_rollout(env, agent, min(500, args.timestep_limit))
-        print "*********** Iteration %i ****************" % COUNTER
-        print tabulate(filter(lambda (k,v) : np.asarray(v).size==1, stats.items())) #pylint: disable=W0110
+        print ("*********** Iteration %i ****************" % COUNTER)#ddlau
+        print (tabulate(filter(lambda k,v : np.asarray(v).size==1, stats.items())))#ddlau #pylint: disable=W0110
         COUNTER += 1
         if args.snapshot_every and ((COUNTER % args.snapshot_every==0) or (COUNTER==args.n_iter)): 
             hdf['/agent_snapshots/%0.4i'%COUNTER] = np.array(cPickle.dumps(agent,-1))
@@ -53,5 +53,5 @@ if __name__ == "__main__":
 
     hdf['env_id'] = env_spec.id
     try: hdf['env'] = np.array(cPickle.dumps(env, -1))
-    except Exception: print "failed to pickle env" #pylint: disable=W0703
+    except Exception: print ("failed to pickle env") #pylint: disable=W0703
     env.monitor.close()

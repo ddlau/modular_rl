@@ -68,7 +68,7 @@ def update_default_config(tuples, usercfg):
     for (name,_,defval,_) in tuples:
         out[name] = defval
     if usercfg:
-        for (k,v) in usercfg.iteritems():
+        for (k,v) in usercfg.items():
             if k in out:
                 out[k] = v
     return out
@@ -96,7 +96,7 @@ def IDENTITY(x):
 GENERAL_OPTIONS = [
     ("seed",int,0,"random seed"),
     ("metadata",str,"","metadata about experiment"),
-    ("outfile",str,"/tmp/a.h5","output file"),
+    ("outfile",str,"./tmp/a.h5","output file"),
     ("use_hdf",int,0,"whether to make an hdf5 file with results and snapshots"),
     ("snapshot_every",int,0,"how often to snapshot"),
     ("load_snapshot",str,"","path to snapshot"),

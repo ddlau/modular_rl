@@ -12,7 +12,7 @@ class PpoLbfgsUpdater(EzFlat, EzPickle):
     def __init__(self, stochpol, usercfg):
         EzPickle.__init__(self, stochpol, usercfg)
         cfg = update_default_config(self.options, usercfg)
-        print "PPOUpdater", cfg
+        print( "PPOUpdater", cfg)
 
         self.stochpol = stochpol
         self.cfg = cfg
@@ -84,7 +84,7 @@ class PpoLbfgsUpdater(EzFlat, EzPickle):
 
         theta, _, opt_info = scipy.optimize.fmin_l_bfgs_b(lossandgrad, thprev, maxiter=cfg["maxiter"])
         del opt_info['grad']
-        print opt_info
+        print( opt_info)
         self.set_params_flat(theta)
         train_losses_after = self.compute_losses(*train_args)
         if cfg["do_split"]: 
@@ -92,12 +92,12 @@ class PpoLbfgsUpdater(EzFlat, EzPickle):
         klafter = train_losses_after[self.loss_names.index("kl")]
         if klafter > 1.3*self.cfg["kl_target"]: 
             self.kl_coeff *= 1.5
-            print "Got KL=%.3f (target %.3f). Increasing penalty coeff => %.3f."%(klafter, self.cfg["kl_target"], self.kl_coeff)
+            print( "Got KL=%.3f (target %.3f). Increasing penalty coeff => %.3f."%(klafter, self.cfg["kl_target"], self.kl_coeff))
         elif klafter < 0.7*self.cfg["kl_target"]: 
             self.kl_coeff /= 1.5
-            print "Got KL=%.3f (target %.3f). Decreasing penalty coeff => %.3f."%(klafter, self.cfg["kl_target"], self.kl_coeff)
+            print( "Got KL=%.3f (target %.3f). Decreasing penalty coeff => %.3f."%(klafter, self.cfg["kl_target"], self.kl_coeff))
         else:
-            print "KL=%.3f is close enough to target %.3f."%(klafter, self.cfg["kl_target"])
+            print ("KL=%.3f is close enough to target %.3f."%(klafter, self.cfg["kl_target"]))
         info = OrderedDict()
         for (name,lossbefore, lossafter) in zipsame(self.loss_names, train_losses_before, train_losses_after):
             info[name+"_before"] = lossbefore
@@ -125,7 +125,7 @@ class PpoSgdUpdater(EzPickle):
     def __init__(self, stochpol, usercfg):
         EzPickle.__init__(self, stochpol, usercfg)
         cfg = update_default_config(self.options, usercfg)
-        print "PPOUpdater", cfg
+        print ("PPOUpdater", cfg)
 
         self.stochpol = stochpol
         self.cfg = cfg
@@ -182,12 +182,12 @@ class PpoSgdUpdater(EzPickle):
             train_stop = (int(.75*N)//batchsize) * batchsize
             test_losses_before = self.test(*[arg[train_stop:] for arg in args])
 
-            print fmt_row(13, ["epoch"] 
+            print (fmt_row(13, ["epoch"] )
                 + self.loss_names
                 + ["test_" + name for name in self.loss_names])
         else:
             train_stop = N
-            print fmt_row(13, ["epoch"] 
+            print (fmt_row(13, ["epoch"] )
                 + self.loss_names)
         train_losses_before = self.test(*[arg[:train_stop] for arg in args])
 
@@ -200,20 +200,20 @@ class PpoSgdUpdater(EzPickle):
             train_losses = np.mean(losses, axis=0)
             if cfg.do_split:
                 test_losses = self.test(*[arg[train_stop:] for arg in args])
-                print fmt_row(13, np.concatenate([[iepoch], train_losses, test_losses]))
+                print (fmt_row(13, np.concatenate([[iepoch], train_losses, test_losses])))
             else:
-                print fmt_row(13, np.concatenate([[iepoch], train_losses]))
+                print (fmt_row(13, np.concatenate([[iepoch], train_losses])))
       
 
         klafter = train_losses[self.loss_names.index('kl')]
         if klafter > 1.3*self.cfg["kl_target"]: 
             self.kl_coeff *= 1.5
-            print "Got KL=%.3f (target %.3f). Increasing penalty coeff => %.3f."%(klafter, self.cfg["kl_target"], self.kl_coeff)
+            print ("Got KL=%.3f (target %.3f). Increasing penalty coeff => %.3f."%(klafter, self.cfg["kl_target"], self.kl_coeff))
         elif klafter < 0.7*self.cfg["kl_target"]: 
             self.kl_coeff /= 1.5
-            print "Got KL=%.3f (target %.3f). Decreasing penalty coeff => %.3f."%(klafter, self.cfg["kl_target"], self.kl_coeff)
+            print( "Got KL=%.3f (target %.3f). Decreasing penalty coeff => %.3f."%(klafter, self.cfg["kl_target"], self.kl_coeff))
         else:
-            print "KL=%.3f is close enough to target %.3f."%(klafter, self.cfg["kl_target"])
+            print ("KL=%.3f is close enough to target %.3f."%(klafter, self.cfg["kl_target"]))
 
         info = {}
         for (name,lossbefore, lossafter) in zipsame(self.loss_names, train_losses_before, train_losses):

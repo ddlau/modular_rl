@@ -7,7 +7,7 @@ import theano.tensor as T, theano
 from importlib import import_module
 import scipy.optimize
 from .keras_theano_setup import floatX, FNOPTS
-from keras.layers.core import Layer
+from keras.layers import Layer
 
 # ================================================================
 # Make agent 
@@ -75,7 +75,7 @@ PG_OPTIONS = [
 def run_policy_gradient_algorithm(env, agent, usercfg=None, callback=None):
     cfg = update_default_config(PG_OPTIONS, usercfg)
     cfg.update(usercfg)
-    print "policy gradient config", cfg
+    print ("policy gradient config", cfg)
 
     if cfg["parallel"]:
         raise NotImplementedError
@@ -83,7 +83,7 @@ def run_policy_gradient_algorithm(env, agent, usercfg=None, callback=None):
     tstart = time.time()
     seed_iter = itertools.count()
 
-    for _ in xrange(cfg["n_iter"]):
+    for _ in range(cfg["n_iter"]):
         # Rollouts ========
         paths = get_paths(env, agent, cfg, seed_iter)
         compute_advantage(agent.baseline, paths, gamma=cfg["gamma"], lam=cfg["lam"])
@@ -115,22 +115,22 @@ def rollout(env, agent, timestep_limit):
     terminated = False
 
     data = defaultdict(list)
-    for _ in xrange(timestep_limit):
+    for _ in range(timestep_limit):
         ob = agent.obfilt(ob)
         data["observation"].append(ob)
         action, agentinfo = agent.act(ob)
         data["action"].append(action)
-        for (k,v) in agentinfo.iteritems():
+        for (k,v) in agentinfo.items():
             data[k].append(v)
         ob,rew,done,envinfo = env.step(action)
         data["reward"].append(rew)
         rew = agent.rewfilt(rew)
-        for (k,v) in envinfo.iteritems():
+        for (k,v) in envinfo.items():
             data[k].append(v)
         if done:
             terminated = True
             break
-    data = {k:np.array(v) for (k,v) in data.iteritems()}
+    data = {k:np.array(v) for (k,v) in data.items()}
     data["terminated"] = terminated
     return data
 
@@ -138,7 +138,7 @@ def do_rollouts_serial(env, agent, timestep_limit, n_timesteps, seed_iter):
     paths = []
     timesteps_sofar = 0
     while True:
-        np.random.seed(seed_iter.next())
+        np.random.seed(seed_iter.__next__()) # ddlau
         path = rollout(env, agent, timestep_limit)
         paths.append(path)
         timesteps_sofar += pathlength(path)
@@ -152,7 +152,7 @@ def pathlength(path):
 def animate_rollout(env, agent, n_timesteps,delay=.01):
     ob = env.reset()
     env.render()
-    for i in xrange(n_timesteps):
+    for i in range(n_timesteps):
         a, _info = agent.act(ob)
         (ob, _rew, done, _info) = env.step(a)
         env.render()
@@ -313,9 +313,12 @@ class DiagGauss(ProbType):
 def test_probtypes():
     theano.config.floatX = 'float64'
     np.random.seed(0)
-
+    print('xxxxxxxxxxxxxxxxxx')
     prob_diag_gauss = np.array([-.2, .3, .4, -.5, 1.1, 1.5, .1, 1.9])
     diag_gauss = DiagGauss(prob_diag_gauss.size // 2)
+
+    validate_probtype(diag_gauss,prob_diag_gauss)
+
     yield validate_probtype, diag_gauss, prob_diag_gauss
 
     prob_categorical = np.array([.2, .3, .5])
@@ -336,7 +339,7 @@ def validate_probtype(probtype, prob):
     entval_ll = - logliks.mean()
     entval_ll_stderr = logliks.std() / np.sqrt(N)
     entval = calcent(Mval).mean()
-    print entval, entval_ll, entval_ll_stderr
+    print (entval, entval_ll, entval_ll_stderr)
     assert np.abs(entval - entval_ll) < 3 * entval_ll_stderr # within 3 sigmas
 
     # Check to see if kldiv[p,q] = - ent[p] - E_p[log q]
@@ -348,7 +351,7 @@ def validate_probtype(probtype, prob):
     logliks = calcloglik(Xval, Mval2)
     klval_ll = - entval - logliks.mean()
     klval_ll_stderr = logliks.std() / np.sqrt(N)
-    print klval, klval_ll,  klval_ll_stderr
+    print (klval, klval_ll,  klval_ll_stderr)
     assert np.abs(klval - klval_ll) < 3 * klval_ll_stderr # within 3 sigmas
 
 
@@ -498,7 +501,7 @@ class LbfgsOptimizer(EzFlat):
         if extra_losses is not None:
             self.all_losses.update(extra_losses)
         self.f_lossgrad = theano.function(list(symb_args), [loss, flatgrad(loss, params)],**FNOPTS)
-        self.f_losses = theano.function(symb_args, self.all_losses.values(),**FNOPTS)
+        self.f_losses = theano.function(symb_args, list(self.all_losses.values()),**FNOPTS) # ddlau
         self.maxiter=maxiter
 
     def update(self, *args):
@@ -511,7 +514,7 @@ class LbfgsOptimizer(EzFlat):
         losses_before = self.f_losses(*args)
         theta, _, opt_info = scipy.optimize.fmin_l_bfgs_b(lossandgrad, thprev, maxiter=self.maxiter)
         del opt_info['grad']
-        print opt_info
+        print (opt_info)
         self.set_params_flat(theta)
         losses_after = self.f_losses(*args)
         info = OrderedDict()

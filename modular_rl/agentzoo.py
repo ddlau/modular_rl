@@ -3,6 +3,10 @@ In this codebase, the "Agent" is a container with the policy, value function, et
 This file contains a bunch of agents
 """
 
+import os
+os.environ['KERAS_BACKEND']='theano'
+from keras import backend as K
+K.set_image_dim_ordering('th')
 
 from modular_rl import *
 from gym.spaces import Box, Discrete
@@ -39,6 +43,8 @@ def make_mlps(ob_space, ac_space, cfg):
     else:
         net.add(Dense(outdim, activation="softmax"))
         Wlast = net.layers[-1].kernel
+
+
         Wlast.set_value(Wlast.get_value(borrow=True)*0.1)
     policy = StochPolicyKeras(net, probtype)
     vfnet = Sequential()

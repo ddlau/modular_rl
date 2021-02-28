@@ -4,7 +4,7 @@ Load a snapshotted agent from an hdf5 file and animate it's behavior
 """
 
 import argparse
-import cPickle, h5py, numpy as np, time
+import _pickle as cPickle, h5py, numpy as np, time
 from collections import defaultdict
 import gym
 
@@ -39,7 +39,7 @@ def main():
     hdf = h5py.File(args.hdf,'r')
 
     snapnames = hdf['agent_snapshots'].keys()
-    print "snapshots:\n",snapnames
+    print ("snapshots:\n",snapnames)
     if args.snapname is None: 
         snapname = snapnames[-1]
     elif args.snapname not in snapnames:

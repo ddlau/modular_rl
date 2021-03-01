@@ -51,6 +51,8 @@ def compute_advantage(vf, paths, gamma, lam):
     for path in paths:
         path["return"] = discount(path["reward"], gamma)
         b = path["baseline"] = vf.predict(path)
+        if not path['terminated']:
+            print( 'trajectory not terminated')
         b1 = np.append(b, 0 if path["terminated"] else b[-1])
         deltas = path["reward"] + gamma*b1[1:] - b1[:-1] 
         path["advantage"] = discount(deltas, gamma * lam)
@@ -86,6 +88,7 @@ def run_policy_gradient_algorithm(env, agent, usercfg=None, callback=None):
     for _ in range(cfg["n_iter"]):
         # Rollouts ========
         paths = get_paths(env, agent, cfg, seed_iter)
+
         compute_advantage(agent.baseline, paths, gamma=cfg["gamma"], lam=cfg["lam"])
         # VF Update ========
         vf_stats = agent.baseline.fit(paths)
@@ -135,6 +138,7 @@ def rollout(env, agent, timestep_limit):
     return data
 
 def do_rollouts_serial(env, agent, timestep_limit, n_timesteps, seed_iter):
+    print( f'do_rollouts_serial: timestep-limit={timestep_limit}, n-timesteps={n_timesteps}')
     paths = []
     timesteps_sofar = 0
     while True:

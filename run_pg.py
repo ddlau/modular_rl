@@ -24,8 +24,8 @@ if __name__ == "__main__":
     # a = x.sampled_variable()
     # print( a, type(a), vars(a) )
 
-    a,b,c=test_probtypes()
-    exit()
+    # a,b,c=test_probtypes()
+    # exit()
     ###
 
 
@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
 
 
-    env = gym.wrappers.Monitor(env, mondir, video_callable=None if args.video else VIDEO_NEVER)
+    #env = gym.wrappers.Monitor(env, mondir, video_callable=None if args.video else VIDEO_NEVER)
     #env = gym.wrappers.Monitor(env, mondir, video_callable=lambda x:env.render())# if args.video else VIDEO_NEVER)
 
 

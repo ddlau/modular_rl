@@ -1,4 +1,4 @@
-import numpy as np, time, itertools
+import time, itertools
 from collections import OrderedDict
 from .misc_utils import *
 from . import distributions
@@ -9,6 +9,8 @@ import scipy.optimize
 from .keras_theano_setup import floatX, FNOPTS
 from keras.layers import Layer
 
+
+from .x import discount
 # ================================================================
 # Make agent 
 # ================================================================
@@ -39,7 +41,7 @@ def add_episode_stats(stats, paths):
     stats["RewPerStep"] = episoderewards.sum()/pathlengths.sum()
 
 def add_prefixed_stats(stats, prefix, d):
-    for (k,v) in d.iteritems():
+    for k,v in d.items():
         stats[prefix+"_"+k] = v
 
 # ================================================================
@@ -69,7 +71,7 @@ PG_OPTIONS = [
     ("timestep_limit", int, 0, "maximum length of trajectories"),
     ("n_iter", int, 200, "number of batch"),
     ("parallel", int, 0, "collect trajectories in parallel"),
-    ("timesteps_per_batch", int, 10000, ""),
+    ("timesteps_per_batch", int, 1000, ""),
     ("gamma", float, 0.99, "discount"),
     ("lam", float, 1.0, "lambda parameter from generalized advantage estimation"),
 ]
@@ -360,14 +362,67 @@ def validate_probtype(probtype, prob):
 
 
 # ================================================================
-# Value functions 
-# ================================================================
+# Value functions
+class NnCpd(EzPickle):
+    def __init__(self, net, probtype, maxiter=25):
+        EzPickle.__init__(self, net, probtype, maxiter)
+        self.net = net
 
+        x_nx = net.input
+
+        prob = net.output
+        a = probtype.sampled_variable()
+        var_list = net.trainable_weights
+
+        loglik = probtype.loglikelihood(a, prob)
+
+        self.loglikelihood = theano.function([a, x_nx], loglik, **FNOPTS)
+        loss = - loglik.mean()
+        symb_args = [x_nx, a]
+        self.opt = LbfgsOptimizer(loss, var_list, symb_args, maxiter=maxiter)
+
+    def fit(self, x_nx, a):
+        return self.opt.update(x_nx, a)
 class Baseline(object):
     def fit(self, paths):
         raise NotImplementedError
     def predict(self, path):
         raise NotImplementedError
+
+class GetFlat(object):
+    def __init__(self, var_list):
+        self.op = theano.function([], T.concatenate([v.flatten() for v in var_list]),**FNOPTS)
+    def __call__(self):
+        return self.op() #pylint: disable=E1101
+class SetFromFlat(object):
+    def __init__(self, var_list):
+
+        theta = T.vector()
+        start = 0
+        updates = []
+        for v in var_list:
+            shape = v.shape
+            size = T.prod(shape)
+            updates.append((v, theta[start:start+size].reshape(shape)))
+            start += size
+        self.op = theano.function([theta],[], updates=updates,**FNOPTS)
+    def __call__(self, theta):
+        self.op(theta.astype(floatX))
+def flatgrad(loss, var_list): # 算loss对参数的梯度，并且展开它
+    grads = T.grad(loss, var_list)
+    return T.concatenate([g.flatten() for g in grads])
+
+class EzFlat(object):
+    def __init__(self, var_list):
+        self.gf = GetFlat(var_list)
+        self.sff = SetFromFlat(var_list)
+    def set_params_flat(self, theta):
+        self.sff(theta)
+    def get_params_flat(self):
+        return self.gf()
+
+# ================================================================
+
 
 class TimeDependentBaseline(Baseline):
     def __init__(self):
@@ -396,6 +451,11 @@ class TimeDependentBaseline(Baseline):
             else:
                 return self.baseline[:lenpath]
 
+
+
+
+# var_list
+
 class NnRegression(EzPickle):
     def __init__(self, net, mixfrac=1.0, maxiter=25):
         EzPickle.__init__(self, net, mixfrac, maxiter)
@@ -407,7 +467,7 @@ class NnRegression(EzPickle):
 
         ypred_ny = net.output
         ytarg_ny = T.matrix("ytarg")
-        var_list = net.trainable_weights
+        var_list = net.trainable_weights # vfnet的可训练参数
         l2 = 1e-3 * T.add(*[T.square(v).sum() for v in var_list])
         N = x_nx.shape[0]
         mse = T.sum(T.square(ytarg_ny - ypred_ny))/N
@@ -431,6 +491,10 @@ class NnRegression(EzPickle):
         return out
 
 
+
+# 这就是baseline
+#   net是vfnet
+#   var_list是vfnet的可训练参数
 class NnVf(object):
     def __init__(self, net, timestep_limit, regression_params):
         self.reg = NnRegression(net, **regression_params)
@@ -446,56 +510,11 @@ class NnVf(object):
         return concat([ob_no, np.arange(len(ob_no)).reshape(-1,1) / float(self.timestep_limit)], axis=1)
 
 
-class NnCpd(EzPickle):
-    def __init__(self, net, probtype, maxiter=25):
-        EzPickle.__init__(self, net, probtype, maxiter)
-        self.net = net
 
-        x_nx = net.input
 
-        prob = net.output
-        a = probtype.sampled_variable()
-        var_list = net.trainable_weights
 
-        loglik = probtype.loglikelihood(a, prob)
 
-        self.loglikelihood = theano.function([a, x_nx], loglik, **FNOPTS)
-        loss = - loglik.mean()
-        symb_args = [x_nx, a]
-        self.opt = LbfgsOptimizer(loss, var_list, symb_args, maxiter=maxiter)
 
-    def fit(self, x_nx, a):
-        return self.opt.update(x_nx, a)
-
-class SetFromFlat(object):
-    def __init__(self, var_list):
-        
-        theta = T.vector()
-        start = 0
-        updates = []
-        for v in var_list:
-            shape = v.shape
-            size = T.prod(shape)
-            updates.append((v, theta[start:start+size].reshape(shape)))
-            start += size
-        self.op = theano.function([theta],[], updates=updates,**FNOPTS)
-    def __call__(self, theta):
-        self.op(theta.astype(floatX))
-
-class GetFlat(object):
-    def __init__(self, var_list):
-        self.op = theano.function([], T.concatenate([v.flatten() for v in var_list]),**FNOPTS)
-    def __call__(self):
-        return self.op() #pylint: disable=E1101
-
-class EzFlat(object):
-    def __init__(self, var_list):
-        self.gf = GetFlat(var_list)
-        self.sff = SetFromFlat(var_list)
-    def set_params_flat(self, theta):
-        self.sff(theta)
-    def get_params_flat(self):
-        return self.gf()
 
 class LbfgsOptimizer(EzFlat):
     def __init__(self, loss,  params, symb_args, extra_losses=None, maxiter=25):
@@ -504,7 +523,7 @@ class LbfgsOptimizer(EzFlat):
         self.all_losses["loss"] = loss        
         if extra_losses is not None:
             self.all_losses.update(extra_losses)
-        self.f_lossgrad = theano.function(list(symb_args), [loss, flatgrad(loss, params)],**FNOPTS)
+        self.f_lossgrad = theano.function(list(symb_args), [loss, flatgrad(loss, params)],**FNOPTS) # flatgrad算loss对参数的梯度，并且展开它
         self.f_losses = theano.function(symb_args, list(self.all_losses.values()),**FNOPTS) # ddlau
         self.maxiter=maxiter
 
@@ -530,9 +549,6 @@ class LbfgsOptimizer(EzFlat):
 def numel(x):
     return T.prod(x.shape)
 
-def flatgrad(loss, var_list):
-    grads = T.grad(loss, var_list)
-    return T.concatenate([g.flatten() for g in grads])
 
 # ================================================================
 # Keras 

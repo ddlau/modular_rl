@@ -47,6 +47,11 @@ def make_mlps(ob_space, ac_space, cfg):
 
         Wlast.set_value(Wlast.get_value(borrow=True)*0.1)
     policy = StochPolicyKeras(net, probtype)
+
+
+
+
+
     vfnet = Sequential()
     for (i, layeroutsize) in enumerate(hid_sizes):
         inshp = dict(input_shape=(ob_space.shape[0]+1,)) if i==0 else {} # add one extra feature for timestep

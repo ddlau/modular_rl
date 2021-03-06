@@ -1,10 +1,15 @@
 import numpy as np
-
+import matplotlib.pyplot as plt
 import tensorflow as tf
+from scipy.optimize import fmin_l_bfgs_b
+import time
+from tensorflow_probability.python.optimizer import lbfgs_minimize as lbfgs
+from tensorflow_probability.python.math import value_and_gradient
+import scipy.optimize
+np.set_printoptions(linewidth=3000, formatter={
+	'float': '{:+.6f}'.format,
 
-from scipy.signal import lfilter
-
-
+})
 def flatten( seq ):
 	return tf.concat( list( tf.reshape( x, [ -1 ] ) for x in seq ), axis=0 )
 
@@ -16,6 +21,160 @@ def replace( seq, vec ):
 		l = tf.reduce_prod( s )
 		x.assign( tf.reshape( tf.slice( vec, [ b ], [ l ] ), s ) )
 		b = b + l
+
+
+#
+# theta = np.linspace(0,100,10000)
+# plt.plot( list(np.sum( np.square( x*t-z)) for t in theta ) )
+# #plt.show()
+#
+# ###
+# def lng(theta):
+# 	return np.sum( np.square(x*theta[0]- z)), np.sum( 2*( x*theta[0]-z )*x )
+# print( 'fmin_l_bfgs_b:')
+# print( fmin_l_bfgs_b(lng, np.array([1.23456]),pgtol=1e-9,epsilon=1e-9,))
+#
+#
+# print( 'minimize:')
+# print( scipy.optimize.minimize(lambda theta:np.sum( np.square(x*theta[0]- z)), np.array([12345.6])) )
+#
+# return
+# ###
+
+
+
+
+import tensorflow
+
+
+
+# yyy = tf.Variable([0.001234], dtype=tf.float32, trainable=True)
+# z = tf.keras.layers.Dense(1,use_bias=False)(x)
+
+def tst():
+	shape_of_input = 3
+	size_of_batch = 100
+
+	x = tf.keras.layers.Input( shape_of_input )
+	y = tf.keras.layers.Dense( 64, activation='tanh')(x)
+	y = tf.keras.layers.Dense( 32, activation='tanh')(y)
+	y = tf.keras.layers.Dense( 16, activation='tanh')(y)
+	z = tf.keras.layers.Dense( 1 )(y)
+
+	m = tf.keras.Model( inputs=x,outputs=z )
+	#m.summary()
+
+	theTheta = flatten(m.trainable_variables)
+
+	#x = np.random.normal( size=(size_of_batch,shape_of_input) ).astype(np.float32)
+	x = np.linspace(0,1,size_of_batch*shape_of_input).reshape( size_of_batch,shape_of_input)#.astype(np.float32)
+	#z = np.sum( x[:,0]*3 +x[:,1]*30+x[:,2]*300, axis=1,keepdims=True )
+
+
+	z = np.sum( x*np.array([[3,30,300]]), axis=1,keepdims=True)
+
+	print( f'x.shape={x.shape}, z.shape={z.shape}')
+
+	opt = tf.keras.optimizers.Adam(0.01)
+	since = time.time()
+	for i in range(100):
+		with tf.GradientTape() as tape:
+			loss = tf.keras.losses.mse(z,  m(x))
+
+
+		opt.minimize( loss, m.trainable_variables, tape=tape )
+		if i % 50==0:
+			print(tf.reduce_mean(loss).numpy())
+
+	print( f'cost: time', time.time()-since)
+	print( 'm', m(x).numpy().reshape(-1))
+
+	# print( (  x*15-z ))
+	print( 'z', z.reshape(-1))
+
+	print('-'*32)
+
+
+	def LnG(theta):
+
+		def f(theta):
+
+
+			replace( m.trainable_variables, theta)
+			tf.reduce_mean( tf.square( m(x)-z))
+
+		return value_and_gradient(f)
+
+		#
+		# return value_and_gradient( lambda )
+		#
+		# with tf.GradientTape() as tape:
+		# 	loss = tf.reduce_mean( tf.square( m(x)-z)) #tf.keras.losses.mse(z,  m(x))
+		# gradient = tape.gradient(loss, m.trainable_variables)
+		# gradient = flatten(gradient)
+		#
+		# print('.',end='')
+		#
+		# #print( f'LnG: ', type(theta), theta.shape, type(loss), loss, type(gradient), gradient.shape)
+		# return loss, gradient
+
+	since = time.time()
+	res= lbfgs( LnG, theTheta, max_iterations=10000)
+	print(res)
+	print(res.converged.numpy())
+	print(res.num_objective_evaluations.numpy())
+	print(res.objective_value.numpy())
+	print( f'cost: time', time.time()-since)
+
+	#replace(m.trainable_variables, res.position)
+	# print( 'xxx', tf.reduce_mean(tf.square(x*yyy-z)))
+	# print('xxx',tf.reduce_mean(tf.square(x*15-z)))
+	#
+	#
+	print( 'm', m(x).numpy().reshape(-1))
+
+	# print( (  x*15-z ))
+	print( 'z', z.reshape(-1))
+	return
+
+
+	losses = list()
+
+	for i in range(500):
+		with tf.GradientTape() as tape:
+			loss = tf.keras.losses.mse(z,m(x)) #tf.reduce_mean( tf.square( m(x) - z ) )
+
+		gradient = tape.gradient(loss, m.trainable_variables )
+
+
+		opt.apply_gradients(zip(gradient, m.trainable_variables ))
+
+		losses.append(loss.numpy())
+
+		if i % 50 == 0:
+			print( loss.numpy())
+			print( m.trainable_variables)
+
+	print( x.reshape(-1))
+	print( m(x).numpy().reshape(-1))
+	print( z.reshape(-1))
+	print( np.square(m(x).numpy().reshape(-1)   -z.reshape(-1)))
+	#plt.plot(losses)
+	#plt.show()
+
+
+
+
+tst()
+exit()
+
+
+
+from scipy.signal import lfilter
+from scipy.optimize import fmin_l_bfgs_b
+
+
+
 
 
 def discount( x, decay, check=None ):
@@ -31,10 +190,12 @@ def discount( x, decay, check=None ):
 
 class GAE:
 
-	def __init__( self, net, γ, λ ):
+	def __init__( self, net, γ, λ, c ):
 		self.net = net
 		self.γ = γ
 		self.λ = λ
+
+		self.c = c
 
 	def A( self, S, R, M ):
 		assert len( R ) + 1 == len( S )
@@ -46,58 +207,116 @@ class GAE:
 
 		return A
 
+	def los( self, S, Y ):
 
-import tensorflow as tf
+		mse = tf.reduce_mean( tf.square( self.net( S ) - Y ) )
+		reg = tf.reduce_sum( list( tf.reduce_sum( tf.square( v ) ) for v in self.net.trainable_variables ) )
+
+		loss = mse + self.c * reg
+
+		return loss, mse, reg
 
 
-class GAE:
-
-	def get_θ( self ):
-		return tf.concat( list( tf.reshape( v, -1 ) for v in self.net.trainable_variables ), axis=0 )
-
-	def set_θ( self, θ ):
-		r = list()
-		s = 0
-		for v in self.net.trainable_variables:
-			u = s + tf.reduce_prod( tf.shape( v ) )
-			r.append( tf.reshape( θ[ s:u ], tf.shape( v ) ) )
-			s = u
-
-		self.net.set_weights( r )
-
-	def __init__( self, net, γ, λ, c ):
-		self.net = net
-		self.γ = γ
-		self.λ = λ
-
-		self.c = c  # coefficient of regularization
-
-	def A( self, S, R, M ):
-		assert len( R ) + 1 == len( S )
-		assert len( M ) + 1 == len( S )
-
-		V = self.net( S )
-		δ = R + M * self.γ * V[ :-1 ] - V[ +1: ]
-		A = discount( δ, self.γ * self.λ, True )
-		return A
 
 	def fit1st( self, S, Y ):
+
+		print('los 111111111111111', self.los(S,Y))
+
+		a1 = self.net(S).numpy().reshape(-1)
+		print(np.stack( (a1,Y), axis=1))
+
+		opt = tf.keras.optimizers.SGD()#0.1)
+
 		@tf.function
-		def vng( θ ):
-			replace( self.net.trainable_variables, θ )
-
+		def train(S,Y):
 			with tf.GradientTape() as tape:
-				mse = tf.reduce_mean( tf.square( self.net( S ) - Y ) )
-				reg = tf.reduce_sum( list( tf.reduce_sum( tf.square( v ) ) for v in self.net.trainable_variables ) )
-				los = mse + self.c * reg
+				los = tf.reduce_mean( tf.square( self.net(S) -Y))
+				#los = self.los(S,Y)
+			grd = tape.gradient(los, self.net.trainable_variables)
 
-			g = tape.gradient( los, self.net.trainable_variables )
+			opt.apply_gradients(zip(grd, self.net.trainable_variables))
 
-			return los, flatten( g )
+		for i in range(10000):
+			train(S,Y)
 
-		import scipy.optimize
 
-		scipy.optimize.fmin_l_bfgs_b( vng, flatten( self.net.trainable_variables ) )
+		print('los 222222222222222', self.los(S,Y))
+		a1 = self.net(S).numpy().reshape(-1)
+		print(np.stack( (a1,Y), axis=1))
+
+		#print( self.net(S).numpy())
+		print('iterations', opt.iterations)
+		return
+
+
+
+
+
+
+		# @tf.function
+		# def JnG( θ ):
+		# 	print( 'JnG:', type(θ))
+		# 	replace( self.net.trainable_variables, tf.cast(θ,tf.float32) )
+		#
+		# 	los = self.los(S, Y )[0]
+		# 	grd = flatten(tf.gradients( los, self.net.trainable_variables ))
+		#
+		# 	#print( 'JnG:', type(los), los, type(grd))
+		#
+		# 	return los, grd
+		#
+		# 	# a,b = JnG(θ)
+		# 	# return a.numpy().astype(np.float64), b.numpy().astype(np.float64)
+		# 	#
+		#
+		# print('los 111111111111111', self.los(S,Y))
+		#
+		# x = flatten(self.net.trainable_variables)
+		#
+		#
+		x, f, d = fmin_l_bfgs_b( lambda xxx: list( x.numpy().astype(np.float64) for x in JnG(xxx)), x, maxiter=250 )
+		#
+		# #print(f, d)
+		#
+		# replace(self.net.trainable_variables, x.astype(np.float32) )
+		#
+		# print('los 222222222222222', self.los(S,Y))
+
+
+def tst():
+
+	shape_of_input = 1
+
+	x = tf.keras.layers.Input(shape_of_input)
+	y = tf.keras.layers.Dense(100,activation='tanh')(x)
+	y = tf.keras.layers.Dense(32,activation='tanh')(y)
+	# y = tf.keras.layers.Dense(16,activation='tanh')(y)
+	z = tf.keras.layers.Dense(1)(y)
+
+	m = tf.keras.Model(inputs=x,outputs=z )
+
+	#x = np.random.normal(size=(3,shape_of_input)).astype(np.float32)
+	x = np.linspace( 0.1,0.9, 3)[:,None]
+	y = np.arange(3,shape_of_input+3,1)[:,None]
+	z = np.sum( x * y, axis=1).astype(np.float32)
+
+	print(x)
+	print(y)
+	print( z)
+	#print( x )
+	#print(z)
+
+	gae = GAE(m, 0.99, 0.98, 0.00001 )
+	gae.fit1st(x,z)
+
+
+tst()
+exit()
+
+
+
+
+
 
 
 class FNV:
@@ -205,8 +424,8 @@ def test():
 	z = tf.keras.layers.Dense( 7 )( y )
 
 	m = tf.keras.Model( inputs=x, outputs=z )
-	m( np.random.rand( 100, 3 ) )
-	m.summary()
+	# m( np.random.rand( 100, 3 ) )
+	# m.summary()
 
 	def g( value ):
 		a = flatten( m.trainable_variables )

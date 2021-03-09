@@ -23,13 +23,13 @@ MLP_OPTIONS = [
 ]
 
 def make_mlps(ob_space, ac_space, cfg):
-    assert isinstance(ob_space, Box)
-    hid_sizes = cfg["hid_sizes"]
+    assert isinstance(ob_space, Box) # ob:box(4), ac:discrete(2)
+    hid_sizes = cfg["hid_sizes"] # 64,64
     if isinstance(ac_space, Box):
         outdim = ac_space.shape[0]
         probtype = DiagGauss(outdim)
     elif isinstance(ac_space, Discrete):
-        outdim = ac_space.n
+        outdim = ac_space.n #2
         probtype = Categorical(outdim)
     net = Sequential()
     for (i, layeroutsize) in enumerate(hid_sizes):

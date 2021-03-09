@@ -79,21 +79,20 @@ def compute_advantage( vf, paths, gamma, lam ):
 		S = vf.preproc( np.concatenate( (path[ "observation" ], path["observation"][-1][None,:]), axis=0))
 		R = path["reward"][:,None]
 		M = np.ones_like(R)
-
-		theta = vf.reg.ez_for_net.gf()
-		replace( gae.m.trainable_variables, theta)
-
-
 		if path['terminated']:
 			M[-1] = 0
 
+		theta = vf.reg.ez_for_net.gf()
+		replace( gae.m.trainable_variables, theta)############################################.astype(np.float64))
 
 		A=gae.A(S,R,M).reshape(-1)
+
+
 		d=np.max( np.abs( path['advantage']-A))
 		# print( 'by schul advantage', path['advantage'])
 		# print( 'advantage', A)
 		print( f'advantage difference: ', d)
-		if d>1e-6:
+		if d>1e-4:
 			raise RuntimeError("fuckwrong")
 
 
@@ -127,6 +126,12 @@ def run_policy_gradient_algorithm( env, agent, usercfg=None, callback=None ):
 	tstart = time.time()
 	seed_iter = itertools.count()
 
+
+
+	#theta1 = agent.baseline.reg.ez_for_net.gf()
+	#replace( gae.m.trainable_variables, theta1)####################.astype(np.float32))
+	#replace( gae.m.trainable_variables, theta1.astype(np.float64))
+
 	for _ in range( cfg[ "n_iter" ] ):
 		# Rollouts ========
 		paths = get_paths( env, agent, cfg, seed_iter )
@@ -136,18 +141,17 @@ def run_policy_gradient_algorithm( env, agent, usercfg=None, callback=None ):
 
 
 
-		theta1 = agent.baseline.reg.ez_for_net.gf()
-		replace( gae.m.trainable_variables, theta1.astype(np.float32))
+
 		vf_stats, X,Y = agent.baseline.fit( paths )
 
-		P = gae.m(X)
-		Y = Y*0.1+P*(1-0.1)
-		gae.fit1st(X,Y)
+		###########################los1st, los2nd = gae.fit1st(X,Y)
+		#los1st, los2nd = gae.fit2nd(X,Y)
 
-		theta1 = agent.baseline.reg.ez_for_net.gf()
-		theta2 = flatten(gae.m.trainable_variables)
 
-		print( 'theta1, theta2', np.max( np.abs( theta1-theta2)))
+		#theta1 = agent.baseline.reg.ez_for_net.gf()
+		#theta2 = flatten(gae.m.trainable_variables)
+
+		#print( 'theta1, theta2', np.max( np.abs( theta1-theta2)))
 
 
 		# Pol Update ========
@@ -158,6 +162,11 @@ def run_policy_gradient_algorithm( env, agent, usercfg=None, callback=None ):
 		add_prefixed_stats( stats, "vf", vf_stats )
 		add_prefixed_stats( stats, "pol", pol_stats )
 		stats[ "TimeElapsed" ] = time.time() - tstart
+
+		#stats['bbbbbbbbb1'] = stats['vf_loss_before']
+		#stats['bbbbbbbbb2'] = los1st
+		#stats['aaaaaaaaa1'] = stats['vf_loss_after']
+		#stats['aaaaaaaaa2'] = los2nd
 		if callback: callback( stats )
 
 
@@ -250,6 +259,7 @@ class StochPolicy( object ):
 
 	def act( self, ob, stochastic=True ):
 		prob = self._act_prob( ob[ None ] )
+		#print( f'ob[None]=', ob[None])
 		if stochastic:
 			return self.probtype.sample( prob )[ 0 ], {"prob": prob[ 0 ]}
 		else:
@@ -525,6 +535,7 @@ class SetFromFlat( object ):
 		self.op = theano.function( [ theta ], [ ], updates=updates, **FNOPTS )
 
 	def __call__( self, theta ):
+		#####print( 'type of floatX', type(floatX), floatX) ############################ float32
 		self.op( theta.astype( floatX ) )
 
 
@@ -581,8 +592,10 @@ class TimeDependentBaseline( Baseline ):
 # var_list
 
 class NnRegression( EzPickle ):
-	def __init__( self, net, mixfrac=1.0, maxiter=25 ):
-		mixfrac=1.0
+	def __init__( self, net, mixfrac=1.0, maxiter=2 ):
+		#print( 'the mixfrac=', mixfrac) ################################### 0.1
+
+		#mixfrac=1.0
 		EzPickle.__init__( self, net, mixfrac, maxiter )
 		self.net = net
 		self.mixfrac = mixfrac
@@ -606,7 +619,11 @@ class NnRegression( EzPickle ):
 	def fit( self, x_nx, ytarg_ny ):
 		nY = ytarg_ny.shape[ 1 ]
 		ypredold_ny = self.predict( x_nx )
-		out = self.opt.update( x_nx, ytarg_ny * self.mixfrac + ypredold_ny * (1 - self.mixfrac) )
+
+		target = ytarg_ny * self.mixfrac + ypredold_ny * (1 - self.mixfrac)
+		print( f'in NnRegression.fit: target sum={np.sum(target)}')
+
+		out = self.opt.update( x_nx, target )
 		yprednew_ny = self.predict( x_nx )
 		out[ "PredStdevBefore" ] = ypredold_ny.std()
 		out[ "PredStdevAfter" ] = yprednew_ny.std()
@@ -656,11 +673,13 @@ class LbfgsOptimizer( EzFlat ):
 	def update( self, *args ):
 		thprev = self.get_params_flat()
 
+		print( 'theta at first in shcul', np.sum(thprev), type(thprev), thprev.dtype)
+
 		def lossandgrad( th ):
 			self.set_params_flat( th )
 			l, g = self.f_lossgrad( *args )
 			g = g.astype( 'float64' )
-			print( f'in shcul: loss and gr', l, np.sum(g))
+			#print( f'in shcul: theta, loss and gr', np.sum(th),  th.dtype, l,  l.dtype, np.sum(g), g.dtype)
 			return (l, g)
 
 		losses_before = self.f_losses( *args )

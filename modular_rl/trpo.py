@@ -4,6 +4,12 @@ from modular_rl import *
 # Trust Region Policy Optimization
 # ================================================================
 
+from .a import Agent, flatten, reshape, CG
+
+
+ppp = Agent()
+
+
 class TrpoUpdater(EzFlat, EzPickle):
     
     options = [
@@ -13,7 +19,7 @@ class TrpoUpdater(EzFlat, EzPickle):
 
     def __init__(self, stochpol, usercfg):
         EzPickle.__init__(self, stochpol, usercfg)
-        cfg = update_default_config(self.options, usercfg)
+        cfg = update_default_config(self.options, usercfg)# damping0.001, maxkl0.01
 
         self.stochpol = stochpol
         self.cfg = cfg
@@ -22,13 +28,22 @@ class TrpoUpdater(EzFlat, EzPickle):
         params = stochpol.trainable_variables
         EzFlat.__init__(self, params)
 
+
+
+
+
+
+
+
+
+
         ob_no = stochpol.input
-        act_na = probtype.sampled_variable()
-        adv_n = T.vector("adv_n")
+        act_na = probtype.sampled_variable() ##### 符号， 轨迹中的动作
+        adv_n = T.vector("adv_n") #### 符号，轨迹中的优势
 
         # Probability distribution:
-        prob_np = stochpol.get_output()
-        oldprob_np = probtype.prob_variable()
+        prob_np = stochpol.get_output() # 网络输出，符号
+        oldprob_np = probtype.prob_variable() # prob 符号， 轨迹中的prob，采样概率，q
 
         logp_n = probtype.loglikelihood(act_na, prob_np)
         oldlogp_n = probtype.loglikelihood(act_na, oldprob_np)
@@ -38,7 +53,7 @@ class TrpoUpdater(EzFlat, EzPickle):
         surr = (-1.0 / N) * T.exp(logp_n - oldlogp_n).dot(adv_n)
         pg = flatgrad(surr, params)
 
-        prob_np_fixed = theano.gradient.disconnected_grad(prob_np)
+        prob_np_fixed = theano.gradient.disconnected_grad(prob_np) ##############################################不计算对prob_np的梯度
         kl_firstfixed = probtype.kl(prob_np_fixed, prob_np).sum()/N
         grads = T.grad(kl_firstfixed, params)
         flat_tangent = T.fvector(name="flat_tan")
@@ -74,14 +89,52 @@ class TrpoUpdater(EzFlat, EzPickle):
         args = (ob_no, action_na, advantage_n, prob_np)
 
         thprev = self.get_params_flat()
+
+        reshape( ppp.p.trainable_variables, thprev, True)
+
+
+        G, L, HVP = ppp.calculate( ob_no, action_na, advantage_n, prob_np)
+
         def fisher_vector_product(p):
-            return self.compute_fisher_vector_product(p, *args)+cfg["cg_damping"]*p #pylint: disable=E1101,W0640
+
+
+
+
+
+            r1 = self.compute_fisher_vector_product(p, *args)
+            r2 = cfg["cg_damping"]*p #pylint: disable=E1101,W0640
+            r3 = r1 + r2
+
+            #r4 = HVP(p).numpy()
+
+
+            #print( '################## dif', np.max( np.abs( r1-r4)))
+
+
+
+
+
+            return r3
         g = self.compute_policy_gradient(*args)
         losses_before = self.compute_losses(*args)
+
+
+        ggg= G()
+        LLL = L()
+        print( '################## g dif', np.max( np.abs( g-ggg.numpy())))
+        print( '################## l dif', np.sum(losses_before)-LLL.numpy())
+
+
+
         if np.allclose(g, 0):
             print ("got zero gradient. not updating")
         else:
             stepdir = cg(fisher_vector_product, -g)
+            sdd = CG( fisher_vector_product, -g )#.numpy()  ################# CG(HVP,-g).numpy()
+            print( f'################## d dif', np.max( np.abs( stepdir-sdd )))
+
+
+
             shs = .5*stepdir.dot(fisher_vector_product(stepdir))
             lm = np.sqrt(shs / cfg["max_kl"])
             print ("lagrange multiplier:", lm, "gnorm:", np.linalg.norm(g))

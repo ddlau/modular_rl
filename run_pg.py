@@ -17,6 +17,39 @@ import gym
 
 if __name__ == "__main__":
 
+    # import tensorflow as tf
+    #
+    # p = tf.random.uniform( (10,10) )
+    # q = tf.random.uniform( (10,10))
+    #
+    # x1 = p/q
+    # x2 = tf.exp( tf.math.log( p) - tf.math.log(q))
+    # print( tf.reduce_max( tf.abs( x1-x2)))
+    #
+    # a = tf.range(5)
+    # b = tf.range(5)*10
+    # print( a*b)
+    #
+    # exit()
+    #
+    #
+    # x = tf.reshape( tf.clip_by_value(tf.range(100)/100, 0.001,0.999),(10,10) )
+    # print(x)
+    #
+    # a = x * tf.math.log( 1/x)
+    # b = - x * tf.math.log(x)
+    # print( 'aaaa', a)
+    # print( 'b',b )
+    #
+    # print( tf.reduce_max( tf.abs( a-b)) )
+    # exit()
+
+    #
+    # x = tf.Variable(np.arange(5))
+    #
+    # print( tf.multiply(x,x))
+    # exit()
+
 
     ###
     # x = DiagGauss(3)
@@ -86,7 +119,8 @@ if __name__ == "__main__":
         COUNTER += 1
         # Print stats
         print ("*********** Iteration !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!%i ****************" % COUNTER)
-        print (tabulate(filter(lambda k,v : np.asarray(v).size==1, stats.items()))) #pylint: disable=W0110
+        #print (tabulate(filter(lambda k,v : np.asarray(v).size==1, stats.items()))) #pylint: disable=W0110
+        print (tabulate(filter(lambda x : np.asarray(x[1]).size==1, stats.items()))) #pylint: disable=W0110
         # Store to hdf5
         if args.use_hdf:
             for (stat,val) in stats.items():

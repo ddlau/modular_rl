@@ -1,0 +1,135 @@
+def xfit1st( self, X, Y ):
+		Y = self.τ * Y + (1 - self.τ) * self.m( X )
+
+		print( f'GAE: np.sum(θ)={np.sum( flatten( self.m.trainable_variables ) )}, np.sum(Y)={np.sum( Y )}' )
+
+		def LnG( θ ):
+			replace( self.m.trainable_variables, θ )
+
+			with tf.GradientTape() as tape:
+				mse = tf.reduce_mean( tf.square( Y - self.m( X ) ) )
+				reg = tf.reduce_sum( list( tf.reduce_sum( tf.square( x ) ) for x in self.m.trainable_variables ) )
+
+				loss = mse + self.c * reg
+
+			gradient = flatten( tape.gradient( loss, self.m.trainable_variables ) )  # mse, self.c*reg,np.sum(gradient1)
+
+			# print( 'me theta, mse, reg, los, gr', np.sum( θ ), loss.numpy(), np.sum( gradient ), )
+			return loss, gradient
+
+		def f( theta ):
+			loss, gradient = LnG( theta.astype( np.float32 ) )
+
+			# loss = tf.cast(loss, tf.float64)
+			gradient = gradient.numpy().astype( np.float64 )
+
+			print( 'me theta, mse, reg, los, gr', np.sum( theta ), loss.numpy(), np.sum( gradient ), )
+
+			return loss, gradient
+
+		x = flatten( self.m.trainable_variables )
+		# print( type( x ), x.shape )
+
+		res = fmin_l_bfgs_b( f, x, maxiter=25 )
+		# res = lbfgs( LnG, x, max_iterations=25 )
+		print( 'res', res )
+
+
+
+		# print( f'mine: before los={los1st}, after={res.objective_value}')
+
+
+
+
+
+
+
+def w( θ ):
+			θ = θ.astype( np.float32 )
+
+			loss, gradient = LnG( θ )
+
+			gradient = gradient.numpy().astype( np.float64 )
+
+			lv( f'GAE: np.sum(θ)={np.sum( θ )}, loss={loss.numpy(), loss.dtype},   np.sum(gradient)={np.sum( gradient )}' )
+			return loss, gradient
+
+		#result = fmin_l_bfgs_b( w, flatten( self.m.trainable_variables ), maxiter=25 )
+
+
+
+			# gradient = flatten( tape.gradient( loss, self.m.trainable_variables ) )
+			#
+			# return loss, gradient
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def xxfit1st( self, X, Y ):
+		Y = self.τ * Y + (1 - self.τ) * self.m( X )
+
+		print( f'GAE: np.sum(θ)={np.sum( flatten( self.m.trainable_variables ) )}, np.sum(Y)={np.sum( Y )}' )
+
+		def LnG( θ ):
+			replace( self.m.trainable_variables, θ )
+
+			with tf.GradientTape() as tape:
+				mse = tf.reduce_mean( tf.square( Y - self.m( X ) ) )
+				reg = tf.reduce_sum( list( tf.reduce_sum( tf.square( x ) ) for x in self.m.trainable_variables ) )
+
+				loss = mse + self.c * reg
+
+			gradient = flatten( tape.gradient( loss, self.m.trainable_variables ) )  # mse, self.c*reg,np.sum(gradient1)
+
+			# print( 'me theta, mse, reg, los, gr', np.sum( θ ), loss.numpy(), np.sum( gradient ), )
+			return loss, gradient
+
+		def f( theta ):
+			loss, gradient = LnG( theta )
+
+			# loss = tf.cast(loss, tf.float64)
+			gradient = gradient.numpy()
+
+			print( 'me theta, mse, reg, los, gr', np.sum( theta ), loss.numpy(), np.sum( gradient ), )
+
+			return loss, gradient
+
+		x = flatten( self.m.trainable_variables )
+		# print( type( x ), x.shape )
+
+		res = fmin_l_bfgs_b( f, x, maxiter=25 )
+		# res = lbfgs( LnG, x, max_iterations=25 )
+		print( 'res', res )
+
+
+
+def xxLnG( θ ):
+			replace( self.m.trainable_variables, θ )
+
+			with tf.GradientTape() as tape:
+				mse = tf.reduce_mean( tf.square( Y - self.m( X ) ) )
+				reg = tf.reduce_sum( list( tf.reduce_sum( tf.square( x ) ) for x in self.m.trainable_variables ) )
+
+				loss = mse + self.c * reg
+
+			gradient = flatten( tape.gradient( loss, self.m.trainable_variables ) )
+
+			return loss, gradient

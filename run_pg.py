@@ -19,6 +19,15 @@ if __name__ == "__main__":
 
     # import tensorflow as tf
     #
+    # p = tf.range(5)
+    # q = tf.range(5)
+    # #print( tf.matmul(p,q)) # error
+    # # print( tf.multiply( p,q ))
+    # #print( tf.experimental.numpy.dot(p,q) )
+    # print( tf.tensordot(p,q,0))
+    # exit()
+
+    #
     # p = tf.random.uniform( (10,10) )
     # q = tf.random.uniform( (10,10))
     #

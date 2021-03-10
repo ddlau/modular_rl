@@ -4,6 +4,8 @@ import tensorflow as tf
 from scipy.signal import lfilter
 from tensorflow_probability.python.optimizer import lbfgs_minimize as lbfgs
 
+tf.config.run_functions_eagerly( False )
+
 tuple( map( lambda x: tf.config.experimental.set_memory_growth( x, True ), tf.config.list_physical_devices( 'GPU' ) ) )
 
 lv = print
@@ -24,13 +26,13 @@ def flatten( seq ):
 	return tf.concat( list( tf.reshape( x, [ -1 ] ) for x in seq ), axis=0 )
 
 
-def replace( seq, vec ):
-	b = 0
-	for x in seq:
-		s = tf.shape( x )
-		l = tf.reduce_prod( s )
-		x.assign( tf.reshape( tf.slice( vec, [ b ], [ l ] ), s ) )
-		b = b + l
+# def replace( seq, vec ):
+# 	b = 0
+# 	for x in seq:
+# 		s = tf.shape( x )
+# 		l = tf.reduce_prod( s )
+# 		x.assign( tf.reshape( tf.slice( vec, [ b ], [ l ] ), s ) )
+# 		b = b + l
 
 
 def reshape( seq, vec, replace=True ):
@@ -51,6 +53,48 @@ def reshape( seq, vec, replace=True ):
 	return r
 
 
+def CG( fAx, b, its=256, tol=1e-10 ):
+	p = b
+	r = b
+	x = tf.zeros( tf.shape( b ) )
+	m = tf.experimental.numpy.dot( r, r )
+
+	for i in range( its ):
+		z = fAx( p )
+		v = m / tf.experimental.numpy.dot( p, z )
+		x = x + v * p
+		r = r - v * z
+		n = tf.experimental.numpy.dot( r, r )
+		p = r + n / m * p
+		m = n
+
+		if m < tol:
+			lv( f'CG: err={m}, its={i}' )
+			break
+
+	return x
+
+
+def bls( l, θ, s, expected, qualified=1 / 10, backtracks=1 * 10 ):
+	lv( f'calling bls for minimizing only...' )
+
+	u = l( θ )
+	lv( '\t', f'first={u}' )
+
+	for f in np.power( 1 / 2, np.arange( backtracks ) ):
+		x = θ + s * f
+		v = l( x )
+		a = u - v
+		e = f * expected
+		r = a / e
+
+		if r > qualified and a > 0:
+			lv( '\t', f'final={v}' )
+			return True, x
+
+	lv( '\t', f'failed' )
+	return None, θ
+
 from scipy.optimize import fmin_l_bfgs_b
 
 
@@ -62,60 +106,6 @@ def build_Axp_function( objective, parameters, damping=0.001 ):
 		return H + x * damping
 
 	return Axp
-
-
-# def cg(f_Ax, b, cg_iters=10, callback=None, verbose=False, residual_tol=1e-10):
-#
-# 	p = tf.stop_gradient(b)
-# 	r = tf.stop_gradient(b)
-# 	x = tf.zeros( tf.shape(b))
-#
-# 	rtr = tf.reduce_sum(tf.square(r))
-#
-# 	for i in range(cg_iters):
-# 		z = f_Ax(p)
-# 		v = rtr / tf.reduce_sum( p*z )
-#
-# 		x = x+v*p
-# 		r = r-v*z
-#
-# 		new_rtr = tf.reduce_sum(tf.square(r))
-# 		mu = new_rtr/rtr
-# 		p = r + mu*p
-#
-# 		rtr = new_rtr
-#
-# 		if rtr < residual_tol:
-# 			print( 'cg, rtr' , rtr)
-# 			break
-#
-# 	#tf.linalg.experimental.conjugate_gradient
-#
-# 	return x
-#
-#
-# 	p = b.copy()
-# 	r = b.copy()
-# 	x = np.zeros_like(b)
-# 	rdotr = r.dot(r)
-#
-#
-# 	for i in range(cg_iters):
-#
-#
-# 		z = f_Ax(p)
-# 		v = rdotr / p.dot(z)
-# 		x += v*p
-# 		r -= v*z
-# 		newrdotr = r.dot(r)
-# 		mu = newrdotr/rdotr
-# 		p = r + mu*p
-#
-# 		rdotr = newrdotr
-# 		if rdotr < residual_tol:
-# 			break
-#
-# 	return x
 
 
 class GAE:
@@ -149,7 +139,7 @@ class GAE:
 
 		@tf.function
 		def LnG( θ ):
-			replace( self.m.trainable_variables, θ )
+			reshape( self.m.trainable_variables, θ )
 
 			mse = tf.reduce_mean( tf.square( Y - self.m( X ) ) )
 			reg = tf.reduce_sum( list( tf.reduce_sum( tf.square( x ) ) for x in self.m.trainable_variables ) )
@@ -262,27 +252,6 @@ def tst():
 	gae.fit1st( x, y )
 
 
-class Categorical:
-	def __init__( self ):
-		pass
-
-	@staticmethod
-	def sample( prob_nk ):
-		prob_nk = np.asarray( prob_nk )
-		assert prob_nk.ndim == 2
-		N = prob_nk.shape[ 0 ]
-		csprob_nk = np.cumsum( prob_nk, axis=1 )
-		return np.argmax( csprob_nk > np.random.rand( N, 1 ), axis=1 )
-
-
-#
-# class Categorical( ProbType ):
-#
-# 	def sampled_variable( self ):
-# 		return T.ivector( 'a' )
-#
-# 	def prob_variable( self ):
-# 		return T.matrix( 'prob' )
 
 
 class Agent:
@@ -313,7 +282,6 @@ class Agent:
 	def likelihood( a, p ):
 		return tf.gather_nd( p, tf.stack( (tf.range( len( p ) ), a), axis=-1 ) )
 
-	# return p[ :, a ]
 
 	@staticmethod
 	def loglikelihood( a, p ):
@@ -321,8 +289,6 @@ class Agent:
 		return tf.math.log(
 			tf.gather_nd( p, tf.stack( (tf.range( len( p ) ), a), axis=-1 ) )
 		)
-
-	# return tf.math.log( p[ :, a ] )
 
 	@staticmethod
 	def kl( p0, p1 ):
@@ -355,7 +321,7 @@ class Agent:
 		self.p = self.build_π_model( 4, 2 )
 		self.b = GAE( self.build_A_model( 5 ), 0.99, 1.0, 0.001, 0.1 )
 
-	def calculate( self, obs, acs, ads, ops, damping=0.001 ):
+	def calculate( self, obs, acs, ads, ops, δ=0.01, damping=0.001 ):
 
 		def G():
 			with tf.GradientTape() as tape:
@@ -380,6 +346,7 @@ class Agent:
 			d = tf.reduce_mean( self.kl( ops, nps ) )
 			e = tf.reduce_mean( self.entropy( nps ) )
 
+			print( 'my losses: ', x, d, e )
 			return x + d + e
 
 		def HVP( v ):
@@ -395,122 +362,46 @@ class Agent:
 				x = tf.reduce_sum( list( tf.reduce_sum( a * b ) for (a, b) in zip( g, v ) ) )
 				g = flatten( outer.gradient( x, self.p.trainable_variables ) )
 
-
 				return g + s
+
+		g = G()
+		d = CG( HVP, -g )
+
+		d1 = d[ None, : ]
+		d2 = HVP( d )[ :, None ]
+
+		d3 = d1 @ d2
+
+		β = np.sqrt( 2 * δ / d3[ 0, 0 ] )  # sqrt() tf.
+
+		s = d * β
+		e = tf.experimental.numpy.dot( -g, s )
+
+		print( 'β', β )
+
+		def η( θ ):
+			reshape( self.p.trainable_variables, θ, True )
+			nps = self.p( obs )
+
+			nps_in_log = self.loglikelihood( acs, nps )
+			ops_in_log = self.loglikelihood( acs, ops )
+
+			x = - tf.reduce_mean( tf.exp( nps_in_log - ops_in_log ) * ads )
+			return x
+
+		theta = flatten( self.p.trainable_variables )
+		theta = bls( η, theta, s, e )[ 1 ]
+
+		# $reshape( self.p.trainable_variables, theta)
+		print( 'after', η( theta ) )
 
 		return G, L, HVP
 
 
-def xCG( fAx, b, its=10, tol=1e-10 ):
-	p = b
-	r = b
-	x = tf.zeros( tf.shape( b ) )
-	m = tf.reduce_sum( r * r )
-
-	for i in range( its ):
-		z = fAx( p )
-		v = m / tf.reduce_sum( p * z )
-		x = x + v * p
-		r = r - v * z
-		n = tf.reduce_sum( r * r )
-		p = r + n / m * p
-		m = n
-
-		if m < tol:
-			break
-
-	return x
-
-def xxCG( fAx, b, its=10, tol=1e-10 ):
-	p = b
-	r = b
-	x = np.zeros(len(b))
-	m = np.sum( r * r )
-
-	for i in range( its ):
-		z = fAx( p )#.numpy()
-		v = m / np.sum( p * z )
-		x = x + v * p
-		r = r - v * z
-		n = np.sum( r * r )
-		p = r + n / m * p
-		m = n
-
-		if m < tol:
-			break
-
-	return x
-
-
-def CG(f_Ax, b, cg_iters=10, callback=None, verbose=False, residual_tol=1e-10):
-
-	p = b.copy()
-	r = b.copy()
-	x = np.zeros_like(b)
-	rdotr = np.sum( r * r ) #r.dot(r)
-
-
-
-	for i in range(cg_iters):
-
-
-		z = f_Ax(p)
-		v = rdotr / np.transpose(p)@z #np.sum( p * z )# p.dot(z)
-		x += v*p
-		r -= v*z
-		newrdotr = r.dot(r)
-		#mu = newrdotr/rdotr
-		p = r + newrdotr/rdotr*p
-
-		rdotr = newrdotr
-		if rdotr < residual_tol:
-			break
-
-
-	return x
 
 
 
 
-
-#
-# def make_mlps(ob_space, ac_space, cfg):
-# 	assert isinstance(ob_space, Box)
-# 	hid_sizes = cfg["hid_sizes"]
-# 	if isinstance(ac_space, Box):
-# 		outdim = ac_space.shape[0]
-# 		probtype = DiagGauss(outdim)
-# 	elif isinstance(ac_space, Discrete):
-# 		outdim = ac_space.n
-# 		probtype = Categorical(outdim)
-# 	net = Sequential()
-# 	for (i, layeroutsize) in enumerate(hid_sizes):
-# 		inshp = dict(input_shape=ob_space.shape) if i==0 else {}
-# 		net.add(Dense(layeroutsize, activation=cfg["activation"], **inshp))
-# 	if isinstance(ac_space, Box):
-# 		net.add(Dense(outdim))
-# 		Wlast = net.layers[-1].kernel
-# 		Wlast.set_value(Wlast.get_value(borrow=True)*0.1)
-# 		net.add(ConcatFixedStd())
-# 	else:
-# 		net.add(Dense(outdim, activation="softmax"))
-# 		Wlast = net.layers[-1].kernel
-#
-#
-# 		Wlast.set_value(Wlast.get_value(borrow=True)*0.1)
-# 	policy = StochPolicyKeras(net, probtype)
-#
-#
-#
-#
-#
-# 	vfnet = Sequential()
-# 	for (i, layeroutsize) in enumerate(hid_sizes):
-# 		inshp = dict(input_shape=(ob_space.shape[0]+1,)) if i==0 else {} # add one extra feature for timestep
-# 		vfnet.add(Dense(layeroutsize, activation=cfg["activation"], **inshp))
-# 	vfnet.add(Dense(1))
-# 	baseline = NnVf(vfnet, cfg["timestep_limit"], dict(mixfrac=0.1))
-# 	return policy, baseline
 
 
 if __name__ == '__main__':

@@ -1,3 +1,348 @@
+def xCG( fAx, b, its=10, tol=1e-10 ):
+	"""exact match, workable,"""
+	p = b
+	r = b
+	x = tf.zeros( tf.shape( b ) )
+	m = np.dot( r, r )
+
+	for i in range( its ):
+		z = fAx( p )
+		v = m / np.dot( p, z )
+		x = x + v * p
+		r = r - v * z
+		n = np.dot( r, r )
+		p = r + n / m * p
+		m = n
+
+		if m < tol:
+			break
+
+	print( '!!!############CG', m )
+	return x
+
+
+
+
+
+
+
+
+
+
+def ok1CG( fAx, b, its=10, tol=1e-10 ):
+	"""exactly match, sdd = CG( fisher_vector_product, -g )"""
+	p = b
+	r = b
+	x = tf.zeros( tf.shape( b ) )
+	m = (r[ None, : ] @ r[ :, None ])[ 0, 0 ]
+
+	for i in range( its ):
+		z = fAx( p )
+		v = m / (p[ None, : ] @ z[ :, None ])[ 0, 0 ]
+		x = x + v * p
+		r = r - v * z
+		n = (r[ None, : ] @ r[ :, None ])[ 0, 0 ]
+		p = r + n / m * p
+		m = n
+
+		if m < tol:
+			break
+
+	print( '#######################CG', m )
+	return x
+
+
+def ok2CG( fAx, bbb, its=10, tol=1e-10 ):
+	"""exactly match, sdd = CG( fisher_vector_product, -g )"""
+	b = tf.Variable( bbb )
+
+	p = b
+	r = b
+	x = tf.zeros( tf.shape( b ) )
+
+	m = tf.Variable( np.dot( bbb, bbb ) )
+	# m = ( r[None,:]@ r[:,None])[0,0]
+	# mm = tf.experimental.numpy.dot(r,r)
+	# mmm = np.dot(bbb,bbb)
+	# print(f'############## m', m.numpy())
+	# print(f'############# mm', mm)
+	# print(f'############ mmm', mmm)
+
+	for i in range( its ):
+
+		xxxx = p.numpy()
+		xxx = fAx( xxxx )
+		z = tf.Variable( xxx )
+		# z = tf.Variable(fAx(p))
+
+		ppp = np.asarray( p )
+		zzz = np.asarray( z )
+		ggg = np.dot( ppp, zzz )
+		v = m / tf.Variable( ggg )  # (p[None,:]@z[:,None])[0,0]
+		x = x + v * p
+		r = r - v * z
+		n = tf.Variable( np.dot( r, r ) )  # ( r[None,:]@ r[:,None])[0,0]
+		p = r + n / m * p
+		m = n
+
+		if m < tol:
+			break
+
+	print( '#######################CG', m )
+	return x.numpy()
+
+
+def tfCG( fAx, b, its=10, tol=1e-10 ):
+	"""tf."""
+
+	p = b
+	r = b
+	x = tf.zeros( tf.shape( b ) )
+	m = tf.experimental.numpy.dot( b, b )
+
+	for i in range( its ):
+		z = fAx( p )
+		v = m / tf.experimental.numpy.dot( p, z )
+		x = x + v * p
+		r = r - v * z
+		n = tf.experimental.numpy.dot( r, r )
+		p = r + n / m * p
+		m = n
+
+		if m < tol:
+			break
+
+	return x
+
+
+def moreorlessCG( fAx, b, its=10, tol=1e-10 ):
+	p = b
+	r = b
+	x = np.zeros( len( b ) )
+	m = np.dot( b, b )
+
+	for i in range( its ):
+		z = np.asarray( fAx( p ) )
+		v = m / np.dot( p, z )
+		x = x + v * p
+		r = r - v * z
+		n = np.dot( r, r )
+		p = r + n / m * p
+		m = n
+
+		if m < tol:
+			break
+
+
+	print( '#######################CG', m )
+	return x
+
+
+
+
+
+# def CG( fAx, bbb, its=10, tol=1e-10):
+# 	"""exactly match, sdd = CG( fisher_vector_product, -g )"""
+# 	b = tf.Variable(bbb)
+#
+#
+# 	p = b
+# 	r = b
+# 	x = tf.zeros( tf.shape(b))
+#
+# 	m = tf.experimental.numpy.dot(b,b)        #tf.Variable( np.dot(bbb,bbb) )
+# 	# m = ( r[None,:]@ r[:,None])[0,0]
+# 	# mm = tf.experimental.numpy.dot(r,r)
+# 	# mmm = np.dot(bbb,bbb)
+# 	# print(f'############## m', m.numpy())
+# 	# print(f'############# mm', mm)
+# 	# print(f'############ mmm', mmm)
+#
+# 	for i in range(its):
+#
+# 		xxxx = p.numpy()
+# 		xxx = fAx(xxxx)
+# 		z = tf.Variable(xxx)
+# 		#z = tf.Variable(fAx(p))
+#
+# 		#ppp = np.asarray(p)
+# 		#zzz = np.asarray(z)
+# 		#ggg = np.dot(ppp,zzz)
+# 		#v = m / tf.Variable(ggg ) #(p[None,:]@z[:,None])[0,0]
+#
+#
+# 		v = m / tf.experimental.numpy.dot( p,z)
+#
+#
+#
+#
+# 		x = x + v * p
+# 		r = r - v * z
+# 		n =  tf.experimental.numpy.dot(r,r)  #                   tf.Variable( np.dot(r,r) )# ( r[None,:]@ r[:,None])[0,0]
+# 		p = r + n / m * p
+# 		m = n
+#
+# 		if m < tol:
+# 			break
+#
+# 	print( '#######################CG', m)
+# 	return x.numpy()
+
+
+def qqCG( fAx, b, its=10, tol=1e-10 ):
+	p = b
+	r = b
+	x = tf.zeros( tf.shape( b ) )
+
+	# mm = tf.experimental.numpy.dot(r,r) #
+	m = (r[ None, : ] @ r[ :, None ])[ 0, 0 ]  # tf.reduce_sum( r * r )
+	# print( f'mm-m', mm-m)
+
+	for i in range( its ):
+		z = fAx( p )
+
+		x1 = (p[ None, : ] @ z[ :, None ])[ 0, 0 ]
+		x2 = tf.experimental.numpy.dot( p, z )
+
+		x3 = np.dot( p, z )
+		print( f'x1,x2,x3', x1, x2.numpy(), x3 )
+		# print( f'x1-x2', x1-x2)
+
+		v = m / x2  # (p[None,:]@z[:,None])[0,0]  #tf.reduce_sum( p * z )
+		x = x + v * p
+		r = r - v * z
+
+		x3 = (r[ None, : ] @ r[ :, None ])[ 0, 0 ]
+		# x4 =tf.experimental.numpy.dot(r,r)
+		# print( f'x3-x4', x3-x4)
+		n = x3  # (r[None,:]@r[:,None])[0,0] #tf.reduce_sum( r * r )
+		p = r + n / m * p
+		m = n
+
+		if m < tol:
+			break
+
+	print( '#######################CG', m )
+	return x
+
+
+def xxCG( fAx, b, its=10, tol=1e-10 ):
+	p = b
+	r = b
+	x = np.zeros( len( b ) )
+	m = np.sum( r * r )
+
+	for i in range( its ):
+		z = fAx( p )  # .numpy()
+		v = m / np.sum( p * z )
+		x = x + v * p
+		r = r - v * z
+		n = np.sum( r * r )
+		p = r + n / m * p
+		m = n
+
+		if m < tol:
+			break
+
+	return x
+
+
+def xxxCG( f_Ax, b, cg_iters=10, callback=None, verbose=False, residual_tol=1e-10 ):
+	p = b.copy()
+	r = b.copy()
+	x = np.zeros_like( b )
+	rdotr = (r[ None, : ] @ r[ :, None ])[ 0, 0 ]  # np.sum( r * r ) #r.dot(r)
+
+	for i in range( cg_iters ):
+
+		z = f_Ax( p )
+
+		xxx = (p[ None, : ] @ z[ :, None ])[ 0, 0 ]
+
+		v = rdotr / xxx  # np.sum( p * z )# p.dot(z)
+		x += v * p
+		r -= v * z
+		newrdotr = r.dot( r )
+		# mu = newrdotr/rdotr
+		p = r + newrdotr / rdotr * p
+
+		rdotr = newrdotr
+		if rdotr < residual_tol:
+			break
+
+	return x
+
+
+#
+# def make_mlps(ob_space, ac_space, cfg):
+# 	assert isinstance(ob_space, Box)
+# 	hid_sizes = cfg["hid_sizes"]
+# 	if isinstance(ac_space, Box):
+# 		outdim = ac_space.shape[0]
+# 		probtype = DiagGauss(outdim)
+# 	elif isinstance(ac_space, Discrete):
+# 		outdim = ac_space.n
+# 		probtype = Categorical(outdim)
+# 	net = Sequential()
+# 	for (i, layeroutsize) in enumerate(hid_sizes):
+# 		inshp = dict(input_shape=ob_space.shape) if i==0 else {}
+# 		net.add(Dense(layeroutsize, activation=cfg["activation"], **inshp))
+# 	if isinstance(ac_space, Box):
+# 		net.add(Dense(outdim))
+# 		Wlast = net.layers[-1].kernel
+# 		Wlast.set_value(Wlast.get_value(borrow=True)*0.1)
+# 		net.add(ConcatFixedStd())
+# 	else:
+# 		net.add(Dense(outdim, activation="softmax"))
+# 		Wlast = net.layers[-1].kernel
+#
+#
+# 		Wlast.set_value(Wlast.get_value(borrow=True)*0.1)
+# 	policy = StochPolicyKeras(net, probtype)
+#
+#
+#
+#
+#
+# 	vfnet = Sequential()
+# 	for (i, layeroutsize) in enumerate(hid_sizes):
+# 		inshp = dict(input_shape=(ob_space.shape[0]+1,)) if i==0 else {} # add one extra feature for timestep
+# 		vfnet.add(Dense(layeroutsize, activation=cfg["activation"], **inshp))
+# 	vfnet.add(Dense(1))
+# 	baseline = NnVf(vfnet, cfg["timestep_limit"], dict(mixfrac=0.1))
+# 	return policy, baseline
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -506,3 +851,166 @@ if __name__ == '__main__':
 	discount( np.array( [ 1, 10, 100, 1000, 10000, 100000, 1000000 ] ), 0.99, True )
 
 	exit()
+# def cg(f_Ax, b, cg_iters=10, callback=None, verbose=False, residual_tol=1e-10):
+#
+# 	p = tf.stop_gradient(b)
+# 	r = tf.stop_gradient(b)
+# 	x = tf.zeros( tf.shape(b))
+#
+# 	rtr = tf.reduce_sum(tf.square(r))
+#
+# 	for i in range(cg_iters):
+# 		z = f_Ax(p)
+# 		v = rtr / tf.reduce_sum( p*z )
+#
+# 		x = x+v*p
+# 		r = r-v*z
+#
+# 		new_rtr = tf.reduce_sum(tf.square(r))
+# 		mu = new_rtr/rtr
+# 		p = r + mu*p
+#
+# 		rtr = new_rtr
+#
+# 		if rtr < residual_tol:
+# 			print( 'cg, rtr' , rtr)
+# 			break
+#
+# 	#tf.linalg.experimental.conjugate_gradient
+#
+# 	return x
+#
+#
+# 	p = b.copy()
+# 	r = b.copy()
+# 	x = np.zeros_like(b)
+# 	rdotr = r.dot(r)
+#
+#
+# 	for i in range(cg_iters):
+#
+#
+# 		z = f_Ax(p)
+# 		v = rdotr / p.dot(z)
+# 		x += v*p
+# 		r -= v*z
+# 		newrdotr = r.dot(r)
+# 		mu = newrdotr/rdotr
+# 		p = r + mu*p
+#
+# 		rdotr = newrdotr
+# 		if rdotr < residual_tol:
+# 			break
+#
+# 	return x
+
+#
+# def bls( η, θ, s, expected, qualified=1 / 10, backtracks=1 * 10 ):
+# 	r_at_first = η( θ )
+# 	for f in np.power( 1 / 2, np.arange( backtracks ) ):
+# 		x = θ + s * f
+# 		r = η( x )
+#
+# 		a = r_at_first - r
+# 		e = expected * f
+# 		r = a / e
+# 		if r > qualified and a > 0:
+# 			return True, x
+# 	else:
+# 		return False, x
+
+#
+# def bls( l, θ, s, expected, qualified=1 / 10, backtracks=1 * 10 ):
+# 	lv( f'calling bls:' )
+#
+# 	u = l( θ )
+# 	lv( '\t', f'first: {u}' )
+#
+# 	for f in np.power( 1 / 2, np.arange( backtracks ) ):
+# 		x = θ + s * f
+# 		v = l( x )
+# 		a = u - v
+# 		e = f * expected
+# 		r = a / e
+# 		if r > qualified and a > 0:
+# 			lv( '\t', f'final: {v}' )
+# 			return True, x
+#
+# 	lv( '\t', f'failed' )
+# 	return False, θ
+
+#
+# def bls( l, θ, s, expected, qualified=1 / 10, backtracks=1 * 10 ):
+# 	u = l( θ )
+# 	lv( f'first: {u}' )
+#
+# 	for f in np.power( 1 / 2, np.arange( backtracks ) ):
+# 		x = θ + s * f
+# 		v = l( x )
+# 		a = u - v
+# 		e = f * expected
+# 		r = a / e
+# 		if r > qualified and a > 0:
+# 			lv( f'final: {v}' )
+# 			return x
+#
+# 	lv( f'failed' )
+# 	return θ
+
+#
+#
+#
+# def bls( η, θ, s, initial, expected, qualified=1/10, backtracks=1*10, descending_not_ascending=True ):
+# 	if initial is None:
+# 		initial = η(θ)
+#
+# 	for f in np.power( 1/2, np.arange( backtracks)):
+# 		x = θ + s * f
+# 		v = η(x)
+# 		a = ( initial - v ) if descending_not_ascending else ( v - initial)
+# 		e = expected * f
+# 		r = a / e
+# 		if r > qualified and a > 0:
+# 			return x
+#
+# 	return θ
+#
+#
+#
+#
+# def xxbls( η, θ, s, expected, qualified=1/10, backtracks=1*10):
+#
+# 	r_at_first = η(θ)
+# 	print( f'before ', r_at_first )
+# 	for f in np.power( 1/2, np.arange( backtracks)):
+# 		x = θ + s * f
+# 		r = η(x)
+#
+# 		a = r_at_first-r
+# 		e = expected * f
+# 		r = a / e
+# 		if r > qualified and a > 0 :
+# 			return True, x
+# 	else:
+# 		return False, x
+
+
+# class Categorical:
+# 	def __init__( self ):
+# 		pass
+#
+# 	@staticmethod
+# 	def sample( prob_nk ):
+# 		prob_nk = np.asarray( prob_nk )
+# 		assert prob_nk.ndim == 2
+# 		N = prob_nk.shape[ 0 ]
+# 		csprob_nk = np.cumsum( prob_nk, axis=1 )
+# 		return np.argmax( csprob_nk > np.random.rand( N, 1 ), axis=1 )
+#
+# class Categorical( ProbType ):
+#
+# 	def sampled_variable( self ):
+# 		return T.ivector( 'a' )
+#
+# 	def prob_variable( self ):
+# 		return T.matrix( 'prob' )

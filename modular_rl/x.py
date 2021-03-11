@@ -1,3 +1,92 @@
+def cpuCG( fAx, b, its=256, tol=1e-10 ):
+	p = b
+	r = b
+	x = np.zeros( len( b ) )
+	m = np.dot( r, r )
+
+	for i in range( its ):
+		z = fAx( p )
+		v = m / np.dot( p, z )
+		x = x + v * p
+		r = r - v * z
+		n = np.dot( r, r )
+		p = r + n / m * p
+		m = n
+
+		#lv( f'---------------------------------------------------------------------------CG: err={m}, its={i}', np.linalg.norm(fAx(x)-b))
+		if m < tol:
+			lv( f'---------------------------------------------------------------------------CG: err={m}, its={i}', np.linalg.norm(fAx(x)-b))
+			#lv( f'CG: err={m}, its={i}' )
+			break
+	else:
+		lv( f'---------------------------------------------------------------------------CG: run out of iterations, err={m}, its={i}', np.linalg.norm(fAx(x)-b))
+
+	return x
+def tsttt():
+	#from scipy.optimize import fmin_cg
+	from scipy.sparse.linalg import cg, LinearOperator
+
+	import scipy.sparse.linalg
+
+
+	A = np.random.rand(100,100)
+	A = A + A.T
+	x = 100+ np.random.rand(100)
+	b = A@x
+	#print( b )
+
+	def fAx(v):
+		return A@ v
+
+
+	res = scipy.sparse.linalg.cg(A,b)
+	print( 'result', res[1], 'error', np.linalg.norm( res[0]-x ) )
+
+	func = LinearOperator( dtype=np.float64, shape=(100,100),matvec=fAx)
+	res = scipy.sparse.linalg.cg(func,b)
+	print( 'result', res[1], 'error', np.linalg.norm( res[0]-x ) )
+
+
+	res = cpuCG( fAx, b, )
+	print( np.linalg.norm( res - x))
+
+tsttt()
+exit()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def xCG( fAx, b, its=10, tol=1e-10 ):
 	"""exact match, workable,"""
 	p = b

@@ -10,6 +10,7 @@ tuple( map( lambda x: tf.config.experimental.set_memory_growth( x, True ), tf.co
 
 lv = print
 
+#from tensorflow_probability.python.
 
 def discount( x, decay, check=None ):
 	y = lfilter( [ 1 ], [ 1, -decay ], x[ ::-1 ], axis=0 )[ ::-1 ]
@@ -68,11 +69,17 @@ def CG( fAx, b, its=256, tol=1e-10 ):
 		p = r + n / m * p
 		m = n
 
+		#lv( f'---------------------------------------------------------------------------CG: err={m}, its={i}', tf.linalg.norm(fAx(x)-b))
 		if m < tol:
 			lv( f'CG: err={m}, its={i}' )
 			break
+	else:
+		lv( f'---------------------------------------------------------------------------CG: run out of iterations, err={m}, its={i}', tf.linalg.norm(fAx(x)-b))
 
 	return x
+
+
+
 
 
 def bls( l, θ, s, expected, qualified=1 / 10, backtracks=1 * 10 ):
@@ -95,17 +102,18 @@ def bls( l, θ, s, expected, qualified=1 / 10, backtracks=1 * 10 ):
 	lv( '\t', f'failed' )
 	return None, θ
 
+
 from scipy.optimize import fmin_l_bfgs_b
+from scipy.optimize import fmin_cg
 
-
-def build_Axp_function( objective, parameters, damping=0.001 ):
-	@tf.function
-	def Axp( x ):
-		J = tf.gradients( objective, parameters )
-		H = flatten( tf.gradients( tf.reduce_sum( flatten( J ) * x ), parameters ) )
-		return H + x * damping
-
-	return Axp
+# def build_Axp_function( objective, parameters, damping=0.001 ):
+# 	@tf.function
+# 	def Axp( x ):
+# 		J = tf.gradients( objective, parameters )
+# 		H = flatten( tf.gradients( tf.reduce_sum( flatten( J ) * x ), parameters ) )
+# 		return H + x * damping
+#
+# 	return Axp
 
 
 class GAE:
@@ -155,6 +163,193 @@ class GAE:
 		res = lbfgs( LnG, flatten( self.m.trainable_variables ), max_iterations=25 )
 
 		return los1st, res.objective_value
+
+	def fit2nd( self, X, Y, δ=100, damping=1e-5 ):
+		Y = self.τ * Y + (1 - self.τ) * self.m( X )
+
+		def L(θ=None):
+			if θ is not None:
+				reshape( self.m.trainable_variables, θ, True )
+			#
+			# mse = tf.reduce_mean( tf.square( Y - self.m( X ) ) )
+			# reg = tf.reduce_sum( list( tf.reduce_sum( tf.square( x ) ) for x in self.m.trainable_variables ) )
+			#
+			# l = mse + self.c * reg
+			#
+			P = self.m(X)
+			l = tf.reduce_mean( tf.square( Y - P ))
+			return l
+
+
+		los1st = L()
+
+		def G():
+			with tf.GradientTape() as tape:
+
+				# mse = tf.reduce_mean( tf.square( Y - self.m( X ) ) )
+				# reg = tf.reduce_sum( list( tf.reduce_sum( tf.square( x ) ) for x in self.m.trainable_variables ) )
+				#
+				# l = mse + self.c * reg
+
+				P = self.m(X)
+				l = tf.reduce_mean( tf.square( Y - P))
+				g = flatten(tape.gradient( l, self.m.trainable_variables))
+				return g
+
+		def HVP( v ):
+			s = v * damping
+			with tf.GradientTape() as outer:
+				with tf.GradientTape() as inner:
+					P = self.m( X )
+					l = tf.reduce_mean( tf.square( Y - P ) )
+					g = inner.gradient( l, self.m.trainable_variables )
+
+					# mse = tf.reduce_mean( tf.square( Y - self.m( X ) ) )
+					# reg = tf.reduce_sum( list( tf.reduce_sum( tf.square( x ) ) for x in self.m.trainable_variables ) )
+					#
+					# l = mse + self.c * reg
+					# g = inner.gradient( l, self.m.trainable_variables )
+
+				v = reshape( g, v, None )
+				x = tf.reduce_sum( list( tf.reduce_sum( a * b ) for (a, b) in zip( g, v ) ) )
+				g = flatten( outer.gradient( x, self.m.trainable_variables ) )
+
+				return g# + s
+
+
+		g = G()
+		d = CG( HVP, -g,15)#, len(g) )
+
+
+		def myL(theta):
+			return L(theta.astype(np.float32)).numpy()
+		#dd = fmin_cg(myL, -g, )
+
+		class lop( tf.linalg.LinearOperator):
+			def __init__(self,):
+				super().__init__(tf.float32, is_self_adjoint=True, is_positive_definite=True)
+
+			def _shape(self):
+				return tf.TensorShape( (len(g), len(g)) )
+
+			def _matmul(self, x, adjoint=False, adjoint_arg=False):
+
+				res = list()
+				for c in tf.range( tf.shape(x)[1]):
+
+
+
+				return None
+			def matvec(self, x, adjoint=False, name="matvec"):
+				return HVP(x)
+
+		dd = tf.linalg.experimental.conjugate_gradient( lop(), -g )
+
+
+		# tf.linalg.LinearOperator( tf.float32, matvec=HVP)
+		# tf.linalg.experimental.conjugate_gradient()
+
+
+
+		d1 = d[ None, : ]
+		d2 = HVP( d )[ :, None ]
+
+		d3 = d1 @ d2
+
+		dd1 = dd[None,:]
+		dd2 = HVP(dd)[:,None]
+		dd3 = dd1@dd2
+
+
+
+
+
+		print( f'======================================d3={d3}, dd3={dd3}')
+
+		β = np.sqrt( 2 * δ / d3[ 0, 0 ] )  # sqrt() tf.
+
+		s = d * β
+		e = tf.experimental.numpy.dot( -g, s )
+
+
+
+
+		#dHd = np.asarray(d) @ np.asarray(HVP(d) )
+
+
+		#β = np.sqrt( 2 * δ / dHd )
+		print( f'ddddddddddddddddddddddddddddddddddddddddddddddddddddd dHd={d3}, beta={β}')
+
+
+		#e = np.dot( -g, s )
+
+
+
+
+
+
+
+		def bls( l, θ, s, expected, qualified=1 / 10, backtracks=1 * 10 ):
+			lv( f'calling bls for minimizing only...' )
+
+			u = l( θ )
+			lv( '\t', f'first={u}' )
+
+			theMinV = float('inf')
+			theMinI = None
+
+			for f in np.power( 1 / 2, np.arange( backtracks ) ):
+				x = θ + s * f
+				v = l( x )
+				a = u - v
+				e = f * expected
+				r = a / e
+
+
+				lv( '\t', f'a={a}, e={e}, r={r}')
+				if r > qualified and a > 0:
+
+
+					if v < theMinV:
+						theMinV = v
+						theMinI = f
+
+					# lv( '\t', f'final={v}' )
+					# return True, x
+
+
+			if theMinI:
+				lv( '\t', f'final={theMinV}')
+				return True , θ + s * theMinI
+
+			lv( '\t', f'failed' )
+			return None, θ
+
+
+
+
+
+
+
+
+		theta = flatten( self.m.trainable_variables )
+		theta = bls( L, theta, s, e )[ 1 ]
+
+
+		los3rd = L(s)
+		los2nd = L(theta)
+
+		print( f'@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
+		print( f'lost1st', los1st)
+		print( f'lost2nd', los2nd)
+		print( f'lost3rd', los3rd)
+
+		return los1st, los2nd
+		# $reshape( self.p.trainable_variables, theta)
+		#print( 'after', L( theta ) )
+
+
+
 
 
 # @tf.function
@@ -252,8 +447,6 @@ def tst():
 	gae.fit1st( x, y )
 
 
-
-
 class Agent:
 
 	@staticmethod
@@ -281,7 +474,6 @@ class Agent:
 	@staticmethod
 	def likelihood( a, p ):
 		return tf.gather_nd( p, tf.stack( (tf.range( len( p ) ), a), axis=-1 ) )
-
 
 	@staticmethod
 	def loglikelihood( a, p ):
@@ -396,12 +588,6 @@ class Agent:
 		print( 'after', η( theta ) )
 
 		return G, L, HVP
-
-
-
-
-
-
 
 
 if __name__ == '__main__':

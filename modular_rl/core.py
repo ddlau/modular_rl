@@ -54,7 +54,7 @@ def add_prefixed_stats( stats, prefix, d ):
 # ================================================================
 
 
-from .a import GAE, model, flatten, replace
+from .a import GAE, model, flatten, reshape
 
 gae = GAE( model( 5 ), 0.99, 1.0, 0.001, 0.1 )
 print( flatten(gae.m.trainable_variables).shape)
@@ -83,7 +83,7 @@ def compute_advantage( vf, paths, gamma, lam ):
 			M[-1] = 0
 
 		theta = vf.reg.ez_for_net.gf()
-		replace( gae.m.trainable_variables, theta)############################################.astype(np.float64))
+		reshape( gae.m.trainable_variables, theta)############################################.astype(np.float64))
 
 		A=gae.A(S,R,M).reshape(-1)
 
@@ -128,9 +128,9 @@ def run_policy_gradient_algorithm( env, agent, usercfg=None, callback=None ):
 
 
 
-	#theta1 = agent.baseline.reg.ez_for_net.gf()
-	#replace( gae.m.trainable_variables, theta1)####################.astype(np.float32))
-	#replace( gae.m.trainable_variables, theta1.astype(np.float64))
+	theta1 = agent.baseline.reg.ez_for_net.gf()
+	reshape( gae.m.trainable_variables, theta1)####################.astype(np.float32))
+	#reshape( gae.m.trainable_variables, theta1.astype(np.float64))
 
 	for _ in range( cfg[ "n_iter" ] ):
 		# Rollouts ========
@@ -145,7 +145,8 @@ def run_policy_gradient_algorithm( env, agent, usercfg=None, callback=None ):
 		vf_stats, X,Y = agent.baseline.fit( paths )
 
 		###########################los1st, los2nd = gae.fit1st(X,Y)
-		#los1st, los2nd = gae.fit2nd(X,Y)
+		los1st, los2nd = gae.fit2nd(X,Y)
+		print( '################################################################## gae fit2nd done')
 
 
 		#theta1 = agent.baseline.reg.ez_for_net.gf()
@@ -163,10 +164,10 @@ def run_policy_gradient_algorithm( env, agent, usercfg=None, callback=None ):
 		add_prefixed_stats( stats, "pol", pol_stats )
 		stats[ "TimeElapsed" ] = time.time() - tstart
 
-		#stats['bbbbbbbbb1'] = stats['vf_loss_before']
-		#stats['bbbbbbbbb2'] = los1st
-		#stats['aaaaaaaaa1'] = stats['vf_loss_after']
-		#stats['aaaaaaaaa2'] = los2nd
+		stats['bbbbbbbbb1'] = stats['vf_mse_before'] ####################stats['vf_loss_before']
+		stats['bbbbbbbbb2'] = los1st
+		stats['aaaaaaaaa1'] = stats['vf_mse_after']##########################stats['vf_loss_after']
+		stats['aaaaaaaaa2'] = los2nd
 		if callback: callback( stats )
 
 

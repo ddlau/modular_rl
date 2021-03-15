@@ -347,6 +347,7 @@ class GAE:
 
 
 
+		#print( f'======================================d3={d3}, dd3={dd3}')
 
 		#dHd = np.asarray(d) @ np.asarray(HVP(d) )
 

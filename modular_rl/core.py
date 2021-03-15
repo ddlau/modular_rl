@@ -156,12 +156,12 @@ def run_policy_gradient_algorithm( env, agent, usercfg=None, callback=None ):
 
 
 		# Pol Update ========
-		pol_stats = agent.updater( paths )
+		###############################pol_stats = agent.updater( paths )
 		# Stats ========
 		stats = OrderedDict()
 		add_episode_stats( stats, paths )
 		add_prefixed_stats( stats, "vf", vf_stats )
-		add_prefixed_stats( stats, "pol", pol_stats )
+		# add_prefixed_stats( stats, "pol", pol_stats )
 		stats[ "TimeElapsed" ] = time.time() - tstart
 
 		stats['bbbbbbbbb1'] = stats['vf_mse_before'] ####################stats['vf_loss_before']

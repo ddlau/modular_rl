@@ -53,6 +53,8 @@ def reshape( seq, vec, replace=True ):
 
 	return r
 
+theH=None
+theG = None
 
 def CG( fAx, b, its=256, tol=1e-10 ):
 	p = b
@@ -64,6 +66,17 @@ def CG( fAx, b, its=256, tol=1e-10 ):
 		z = fAx( p )
 		v = m / tf.experimental.numpy.dot( p, z )
 		x = x + v * p
+
+
+		xxx1 = x[None,:]
+		xxx2 = fAx(x)[:,None]
+		xxx3 = (xxx1@xxx2)[0,0].numpy()
+		print( f'xxxxxxxxxxxxxxxxxxx3 = ',xxx3)
+		if xxx3 < 0:
+			print( np.all( np.linalg.eigvals(theH)>0))
+			print( np.allclose( theG,0))
+			print( '-------------------------------')
+
 		r = r - v * z
 		n = tf.experimental.numpy.dot( r, r )
 		p = r + n / m * p
@@ -80,6 +93,42 @@ def CG( fAx, b, its=256, tol=1e-10 ):
 
 
 
+def xCG(mat_vec_prod, y, iterations=10, damping=None, norm_limit=None):
+	if damping is None:
+		damping = 1e-3#FLAGS.CG_damping
+	if norm_limit is None:
+		norm_limit = 1e-10#FLAGS.CG_norm_limit
+	r = y
+	l = tf.experimental.numpy.dot(r,r)  #r.dot(r)
+	b = r
+	x = np.zeros(y.shape)
+	eps = 1e-8
+
+	# regularization term Ax = y => (A + delta I) x = y, too large delta will do harm to FIM.
+	# Too small delta results in NaN
+	# one idea originally from Levenberg - Marquardt algorithm
+	# This idea can even be broadened into diag(A).
+	delta = 0#damping
+
+	limit = y.shape[0] * norm_limit ** 2  # early stop in the case A is not full rank
+	for k in range(iterations):
+		Ab = mat_vec_prod(b) + b * delta
+		bAb = tf.experimental.numpy.dot(b,Ab) #b.dot(Ab)
+		alpha = l / (bAb + eps)
+		x = x + alpha * b
+		r = r - alpha * Ab
+		# logging.debug("Ab = %s, x = %s, b = %s" % (Ab, x, b))
+
+		new_l = tf.experimental.numpy.dot(r,r)# r.dot(r)
+		# logging.debug("new l = %s, alpha = %s, bAb = %s, x = %s" % (new_l, alpha, bAb, x))
+		if new_l <= limit:
+			break
+		beta = new_l / (l + eps)
+		b = r + beta * b
+		l = new_l
+	# logging.debug("Ax - y = %s" % (mat_vec_prod(x) - y,))
+
+	return x, tf.experimental.numpy.dot( x, y-r)#x.dot(y - r)
 
 
 def bls( l, θ, s, expected, qualified=1 / 10, backtracks=1 * 10 ):
@@ -164,8 +213,20 @@ class GAE:
 
 		return los1st, res.objective_value
 
-	def fit2nd( self, X, Y, δ=100, damping=1e-5 ):
+
+
+	def fit2nd( self, X, Y, delta=100, damping=1e-2 ):
 		Y = self.τ * Y + (1 - self.τ) * self.m( X )
+
+
+
+
+
+
+	def fit2nd_bad( self, X, Y, δ=100, damping=1e-2 ):
+		Y = self.τ * Y + (1 - self.τ) * self.m( X )
+
+		global theG
 
 		def L(θ=None):
 			if θ is not None:
@@ -196,8 +257,40 @@ class GAE:
 				g = flatten(tape.gradient( l, self.m.trainable_variables))
 				return g
 
+
+
+
 		def HVP( v ):
+			global theH
 			s = v * damping
+
+			with tf.GradientTape() as outer:
+				with tf.GradientTape() as inner:
+					P = self.m( X )
+					l = tf.reduce_mean( tf.square( Y - P ) )
+
+				g = flatten(inner.gradient( l, self.m.trainable_variables ))
+
+			h = outer.jacobian(g, self.m.trainable_variables)
+
+			res = list()
+			for xxx in h:
+				res.append( tf.reshape( xxx, (len(xxx),-1) ) )
+
+			hhh = tf.concat( res, -1)
+
+
+
+			#res = tf.transpose(hhh )@v[:,None]
+			res =  tf.reshape( hhh @v[:,None], -1)
+
+			theH = np.asarray(hhh).copy()
+
+			###print( 'hhhhhhhhhh',tf.shape(hhh))
+
+			return res +s
+
+
 			with tf.GradientTape() as outer:
 				with tf.GradientTape() as inner:
 					P = self.m( X )
@@ -214,59 +307,40 @@ class GAE:
 				x = tf.reduce_sum( list( tf.reduce_sum( a * b ) for (a, b) in zip( g, v ) ) )
 				g = flatten( outer.gradient( x, self.m.trainable_variables ) )
 
-				return g# + s
+			print( 'the difffffffffffffffffffffffffffffff', tf.reduce_max( tf.abs( res-g)))
+
+			return res +s
+			return g + s
 
 
 		g = G()
+		theG = np.asarray(g)
 		d = CG( HVP, -g,15)#, len(g) )
 
 
-		def myL(theta):
-			return L(theta.astype(np.float32)).numpy()
-		#dd = fmin_cg(myL, -g, )
-
-		class lop( tf.linalg.LinearOperator):
-			def __init__(self,):
-				super().__init__(tf.float32, is_self_adjoint=True, is_positive_definite=True)
-
-			def _shape(self):
-				return tf.TensorShape( (len(g), len(g)) )
-
-			def _matmul(self, x, adjoint=False, adjoint_arg=False):
-
-				res = list()
-				for c in tf.range( tf.shape(x)[1]):
-
-
-
-				return None
-			def matvec(self, x, adjoint=False, name="matvec"):
-				return HVP(x)
-
-		dd = tf.linalg.experimental.conjugate_gradient( lop(), -g )
-
-
-		# tf.linalg.LinearOperator( tf.float32, matvec=HVP)
-		# tf.linalg.experimental.conjugate_gradient()
+		# def myL(theta):
+		# 	return L(theta.astype(np.float32)).numpy()
+		# dd = fmin_cg(myL, -g, )
+		# dd1 = dd[None,:]
+		# dd2 = HVP(dd)[:,None]
+		# dd3 = dd1@dd2
 
 
 
 		d1 = d[ None, : ]
 		d2 = HVP( d )[ :, None ]
-
+		#
 		d3 = d1 @ d2
-
-		dd1 = dd[None,:]
-		dd2 = HVP(dd)[:,None]
-		dd3 = dd1@dd2
-
-
+		d3 = d3[0,0]
+		if d3<0:
+			#print( np.all( np.linalg.eigvals(theH)>0))
+			print( '----------------------------------------------------------------- d3<0', np.allclose(np.asarray(g),0))
 
 
 
-		print( f'======================================d3={d3}, dd3={dd3}')
+		#print( f'======================================d3={d3}, dd3={dd3}')
 
-		β = np.sqrt( 2 * δ / d3[ 0, 0 ] )  # sqrt() tf.
+		β = np.sqrt( 2 * δ / d3 )  # sqrt() tf.
 
 		s = d * β
 		e = tf.experimental.numpy.dot( -g, s )
